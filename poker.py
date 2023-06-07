@@ -60,7 +60,7 @@ def hand_rank(hand: tp.List[str]) -> tp.Tuple[int, tp.Any, tp.Any]:
     elif kind(3, ranks) and kind(2, ranks):  # фуллхаус
         return 6, kind(3, ranks), kind(2, ranks)
     elif flush(hand):  # флеш
-        return 5, max(ranks)
+        return 5, max(ranks), ranks
     elif straight(ranks):  # стрит
         return 4, max(ranks)
     elif kind(3, ranks):  # сет (3 одинаковых)
@@ -96,19 +96,17 @@ def flush(hand: tp.List[str]) -> bool:
 def straight(ranks: tp.List[int]) -> bool:
     """Возвращает True, если отсортированные ранги формируют последовательность 5ти,
     где у 5ти карт ранги идут по порядку (стрит)"""
-    if len(ranks) == 0:
-        return False
-    ranks_iter = iter(ranks)
-    prev_rank = next(ranks_iter)
     five = 1
-    for rank in ranks_iter:
-        if prev_rank - rank == 1:  # or rank == 2 and prev_rank == 14:
-            five += 1
-            if five == 5:
-                return True
+    for idx, rank in enumerate(ranks):
+        if idx == 0:
+            continue
         else:
-            five = 1
-        prev_rank = rank
+            if ranks[idx - 1] - rank == 1:
+                five += 1
+                if five == 5:
+                    return True
+            else:
+                return False
     return False
 
 
@@ -150,6 +148,8 @@ def sub_rank_power(sub_rank: tp.Any) -> float:
         return 0.0
     if type(sub_rank) is int:
         return sub_rank
+    elif type(sub_rank) is str:
+        return card_rank(sub_rank)
     elif type(sub_rank) is list:
         sub_power = 0
         for idx, val in enumerate(sub_rank):
@@ -159,8 +159,8 @@ def sub_rank_power(sub_rank: tp.Any) -> float:
         raise RuntimeError(f"Неизвестный тип для сравнения {type(sub_rank)}")
 
 
-def hand_power(rank: tp.Tuple[int, tp.Any, tp.Any]) -> float:
-    result = rank[0]
+def hand_power(rank: tp.Tuple[tp.Any, tp.Any, tp.Any]) -> float:
+    result = rank[0] if type(rank[0]) is int else card_rank(rank[0])
     if len(rank) > 1 and rank[1] is not None:
         result += 0.01 * sub_rank_power(rank[1])
     if len(rank) > 2 and rank[2] is not None:
@@ -182,50 +182,55 @@ def best_hand(hand: tp.List[str]) -> tp.List[str]:
 
 
 def generate_all_card_suite(suite: str) -> tp.List[str]:
-    cards = "T J Q K A".split()
-    cards.append([x for x in range(2, 10)])
+    cards = "T J Q K A".split() + [str(x) for x in range(2, 10)]
     return [f"{x}{suite}" for x in cards]
 
 
-def joker_replacement_generator(is_black: bool) -> tp.Generator[str, None, None]:
+def joker_replacement_generator(is_black: bool) -> tp.List[str]:
     if is_black:
         cards = generate_all_card_suite("C")
-        cards.append(generate_all_card_suite("S"))
+        cards += generate_all_card_suite("S")
     else:
         cards = generate_all_card_suite("H")
-        cards.append(generate_all_card_suite("D"))
-    for card in cards:
-        yield card
+        cards += generate_all_card_suite("D")
+    return cards
 
 
-def prepare_hand_iterator(hand: tp.List[str]) -> tp.Generator[str, None, None]:
-    hand_iterator = None
+def prepare_hand_iterator(hand: tp.List[str]) -> tp.Generator[tp.List[str], None, None]:
     clear_cards = []
+    joker_iterators = None
     for card in hand:
         if card == "?B":
-            hand_iterator = joker_replacement_generator(True) if hand_iterator is None else itertools.product(hand_iterator, joker_replacement_generator(True))
+            joker_iterators = itertools.product(joker_iterators, joker_replacement_generator(True)) if joker_iterators else joker_replacement_generator(True)
         elif card == "?R":
-            hand_iterator = joker_replacement_generator(False) if hand_iterator is None else itertools.product(hand_iterator, joker_replacement_generator(False))
+            joker_iterators = itertools.product(joker_iterators, joker_replacement_generator(False)) if joker_iterators else joker_replacement_generator(False)
         else:
             clear_cards.append(card)
-    for joker_cards in hand_iterator:
-        if joker_cards in clear_cards:
-            continue
-        yield clear_cards + [joker_cards]
+    if joker_iterators:
+        for joker_cards in joker_iterators:
+            result_card = clear_cards.copy()
+            if type(joker_cards) == str:
+                result_card.append(joker_cards)
+            else:
+                result_card += [card for card in joker_cards if card not in result_card]
+            if len(result_card) < 7:
+                continue
+            yield result_card
+    else:
+        yield hand
 
 
 def best_wild_hand(hand: tp.List[str]):
     """best_hand но с джокерами"""
     best = None
     power = 0
-    for test_hand in prepare_hand_iterator(hand):
-        print(test_hand)
-        rank = best_hand(test_hand)
-        print(rank)
-        test_power = hand_power(rank)
+    for wild_hand in prepare_hand_iterator(hand):
+        rank = best_hand(wild_hand)
+        test_power = hand_power(hand_rank(rank))
         if test_power > power:
-            best = test_hand
+            best = rank
             power = test_power
+    print(f"result wild hand = {sorted(best)}")
     return sorted(best)
 
 
@@ -233,6 +238,8 @@ def test_best_hand():
     print("test_best_hand...")
     assert (sorted(best_hand("6C 7C 8C 9C TC 5C JS".split()))
             == ['6C', '7C', '8C', '9C', 'TC'])
+    assert (sorted(best_hand("6C 7C 8C 9C TC 5C JC".split()))
+            == ['7C', '8C', '9C', 'JC', 'TC'])
     assert (sorted(best_hand("TD TC TH 7C 7D 8C 8S".split()))
             == ['8C', '8S', 'TC', 'TD', 'TH'])
     assert (sorted(best_hand("JD TC TH 7C 7D 7S 7H".split()))
@@ -244,10 +251,10 @@ def test_best_wild_hand():
     print("test_best_wild_hand...")
     assert (sorted(best_wild_hand("6C 7C 8C 9C TC 5C ?B".split()))
             == ['7C', '8C', '9C', 'JC', 'TC'])
-    #assert (sorted(best_wild_hand("TD TC 5H 5C 7C ?R ?B".split()))
-     #       == ['7C', 'TC', 'TD', 'TH', 'TS'])
-    #assert (sorted(best_wild_hand("JD TC TH 7C 7D 7S 7H".split()))
-     #       == ['7C', '7D', '7H', '7S', 'JD'])
+    assert (sorted(best_wild_hand("TD TC 5H 5C 7C ?R ?B".split()))
+            == ['7C', 'TC', 'TD', 'TH', 'TS'])
+    assert (sorted(best_wild_hand("JD TC TH 7C 7D 7S 7H".split()))
+            == ['7C', '7D', '7H', '7S', 'JD'])
     print('OK')
 
 
@@ -269,9 +276,9 @@ def test_card_ranks():
 
 def test_straight():
     print("test_straight function..")
-    assert (straight(card_ranks("6C 7C 8C 9C TC 5C".split())))
-    assert (straight(card_ranks("QC 6C 7C 8C 9C TC".split())))
-    assert (straight(card_ranks("4C 6C 7C 8C 9C TC".split())))
+    assert (straight(card_ranks("6C 7C 8C 9C TC".split())))
+    assert (not straight(card_ranks("QC 6C 7C 8C 9C".split())))
+    assert (straight(card_ranks("5C 6C 7C 8C 9C".split())))
     assert (not straight(card_ranks("JD TC TH 7C 7D 7S 7H".split())))
     assert (not straight(card_ranks("JD TC TH".split())))
     assert (not straight(card_ranks("".split())))
@@ -296,10 +303,10 @@ def test_two_pairs():
 
 
 if __name__ == '__main__':
-    #test_flush()
-    #test_card_ranks()
-    #test_straight()
-    #test_kind()
-    #test_two_pairs()
-    #test_best_hand()
+    test_flush()
+    test_card_ranks()
+    test_straight()
+    test_kind()
+    test_two_pairs()
+    test_best_hand()
     test_best_wild_hand()
