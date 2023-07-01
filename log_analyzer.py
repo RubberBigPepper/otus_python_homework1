@@ -9,6 +9,7 @@ import logging
 import time
 import os
 import os.path
+from dataclasses import dataclass
 
 # log_format ui_short '$remote_addr  $remote_user $http_x_real_ip [$time_local] "$request" '
 #                     '$status $body_bytes_sent "$http_referer" '
@@ -18,38 +19,34 @@ import os.path
 default_config = {
     "REPORT_SIZE": 1000,
     "REPORT_DIR": "./reports",
-    "LOG_DIR": "./log"
+    "LOG_DIR": "./log",
+    "ERROR_MAX_RATIO": 0.4,  # отношение ошибочных строк к общим, больше которого - ошибка обработки лога
+    "LOG_FILE": None  # файл для лога, если нет - в консоль
 }
 
 
+@dataclass
 class LogInfo:
-    def __init__(self):
-        self._remote_addr = ""
-        self._remote_user = ""
-        self._http_x_real_ip = ""
-        self._time_local = datetime.date
-        self._request = ""
-        self._status = ""
-        self._body_bytes_sent = ""
-        self._http_referer = ""
-        self._http_user_agent = ""
-        self._http_x_forwarded_for = ""
-        self._http_X_REQUEST_ID = ""
-        self._http_X_RB_USER = ""
-        self._request_time = 0.0
-
-    def request(self) -> str:
-        return self._request
+    remote_addr = ""
+    remote_user = ""
+    http_x_real_ip = ""
+    time_local = datetime.date
+    request = ""
+    status = ""
+    body_bytes_sent = ""
+    http_referer = ""
+    http_user_agent = ""
+    http_x_forwarded_for = ""
+    http_X_REQUEST_ID = ""
+    http_X_RB_USER = ""
+    request_time = 0.0
 
     def request_clear(self) -> str:
-        fields = self._request.split()
+        fields = self.request.split()
         if len(fields) > 2:
             return fields[1]
         else:
             return fields[0]
-
-    def request_time(self) -> float:
-        return self._request_time
 
 
 class StatInfo:
@@ -58,10 +55,10 @@ class StatInfo:
         self._request = request
         self._request_times = []
 
-    def append_time(self, request_time: float):
-        return self._request_times.append(request_time)
+    def append_time(self, request_time: float) -> None:
+        self._request_times.append(request_time)
 
-    def count(self):
+    def count(self) -> int:
         return len(self._request_times)
 
     def request_times_sum(self) -> float:
@@ -89,34 +86,50 @@ class StatInfo:
 
 def parse_log_info(data: tp.Iterator[str]) -> LogInfo:
     result = LogInfo()
-    result._remote_addr = next(data)
-    result._remote_user = next(data)
-    result._http_x_real_ip = next(data)
-    result._time_local = time.strptime(next(data), "[%d/%b/%Y:%H:%M:%S %z]")
-    result._request = next(data)
-    result._status = next(data)
-    result._body_bytes_sent = next(data)
-    result._http_referer = next(data)
-    result._http_user_agent = next(data)
-    result._http_x_forwarded_for = next(data)
-    result._http_X_REQUEST_ID = next(data)
-    result._http_X_RB_USER = next(data)
-    result._request_time = float(next(data))
+    result.remote_addr = next(data)
+    result.remote_user = next(data)
+    result.http_x_real_ip = next(data)
+    result.time_local = time.strptime(next(data), "[%d/%b/%Y:%H:%M:%S %z]")
+    result.request = next(data)
+    result.status = next(data)
+    result.body_bytes_sent = next(data)
+    result.http_referer = next(data)
+    result.http_user_agent = next(data)
+    result.http_x_forwarded_for = next(data)
+    result.http_X_REQUEST_ID = next(data)
+    result.http_X_RB_USER = next(data)
+    result.request_time = float(next(data))
     return result
 
 
-def process_log_info(reader: tp.Generator[tp.Iterator[str], None, None]) -> tp.Dict[str, StatInfo]:
+def process_log_info(reader: tp.Generator[tp.Iterator[str], None, None]) -> tp.Tuple[tp.Dict[str, StatInfo], int]:
     request_2_log_info = {}
+    error_count = 0
     for info in reader:
         try:
             log_info = parse_log_info(info)
             request = log_info.request_clear()
             sat_info = request_2_log_info[request] if request_2_log_info.get(request, False) else StatInfo(request)
-            sat_info.append_time(log_info.request_time())
+            sat_info.append_time(log_info.request_time)
             request_2_log_info[request] = sat_info
         except Exception as exc:
-            logging.error(exc.args)
-    return request_2_log_info
+            logging.exception(exc.args)
+            error_count += 1
+    return request_2_log_info, error_count
+
+
+def log_line_split(s: str) -> tp.List[str]:
+    parts = re.sub('".+?"|\[.+?\]', lambda x: x.group(0).replace(" ", "\x00"), s).split()
+    return [part.replace("\x00", " ").replace('"', '') for part in parts]
+
+
+def _read_log(log_name: str) -> tp.Generator[tp.Iterator[str], None, None]:
+    reader = gzip.open if log_name.lower().endswith(".gz") else open
+    with reader(log_name, mode="rt", encoding="utf8") as file:
+        for line in file:
+            row = log_line_split(line.rstrip())
+            # print(row)
+            yield iter(row)
 
 
 def calculate_stat_info(stat_info: tp.Dict[str, StatInfo]) -> tp.List[dict]:
@@ -132,7 +145,7 @@ def calculate_stat_info(stat_info: tp.Dict[str, StatInfo]) -> tp.List[dict]:
         row_table = {
             "url": request,
             "count": info.count(),
-            "count_perc":  round(float(info.count()) / all_count, 3),
+            "count_perc": round(float(info.count()) / all_count, 3),
             "time_sum": round(info.request_times_sum(), 3),
             "time_perc": round(info.request_times_sum() / all_time, 3),
             "time_avg": round(info.request_times_avg(), 3),
@@ -144,25 +157,14 @@ def calculate_stat_info(stat_info: tp.Dict[str, StatInfo]) -> tp.List[dict]:
     return result
 
 
-def splitter(s: str) -> tp.List[str]:
-    parts = re.sub('".+?"|\[.+?\]', lambda x: x.group(0).replace(" ", "\x00"), s).split()
-    return [part.replace("\x00", " ").replace('"', '') for part in parts]
-
-
-def _read_log(log_name: str) -> tp.Generator[tp.Iterator[str], None, None]:
-    reader = gzip.open if log_name.lower().endswith(".gz") else open
-    with reader(log_name, mode="rt", encoding="utf8") as file:
-        for line in file:
-            yield iter(splitter(line.rstrip()))
-
-
-def process_log_file(log_name: str) -> tp.List[dict]:
-    stat_info = calculate_stat_info(process_log_info(_read_log(log_name)))
+def process_log_file(log_name: str) -> tp.Tuple[tp.List[dict], int]:
+    log_info, error_count = process_log_info(_read_log(log_name))
+    stat_info = calculate_stat_info(log_info)
     stat_info.sort(key=lambda x: x["time_perc"], reverse=True)
-    return stat_info
+    return stat_info, error_count
 
 
-def create_html_file(html_save: str, stat_info: tp.List[dict]):
+def create_html_file(html_save: str, stat_info: tp.List[dict]) -> None:
     html_txt = pathlib.Path('report.html').read_text().replace("$table_json", str(stat_info))
     pathlib.Path(html_save).write_text(html_txt)
 
@@ -183,28 +185,35 @@ def provide_last_log_path_and_date(log_folder: str) -> tp.Tuple[tp.Optional[str]
     return log_name, date_str
 
 
-def process_folder(log_folder: str, report_folder: str, report_size: int = 0):
+def process_folder(log_folder: str, report_folder: str, max_error_ratio: float, report_size: int = 0) -> None:
     log_name, date_str = provide_last_log_path_and_date(log_folder)
     if log_name is None or date_str is None:
-        logging.warning("No log file to work, exit")
+        logging.info("No log file to work, exit")
         return
     html_save = os.path.join(report_folder, f"report-{date_str}.html")
     if os.path.exists(html_save):
         logging.info("report file to log already exists, working was canceled, exit")
         return
-    stat_info = process_log_file(os.path.join(log_folder, log_name))
+    stat_info, error_count = process_log_file(os.path.join(log_folder, log_name))
+    error_ratio = float(error_count) / len(stat_info)
+    if error_ratio > max_error_ratio:
+        logging.error(f"report file has too many error(error_ratio is {error_ratio}, limit is {max_error_ratio}, exit")
+        return
     if report_size > 0:
         stat_info = stat_info[:min(len(stat_info), report_size)]
     create_html_file(html_save, stat_info)
 
 
-def main(config=None):
+def prepare_logging(filename: tp.Optional[str]) -> None:
+    logging.basicConfig(filename=filename, level=logging.DEBUG,
+                        format="[%(asctime)s] %(levelname).1s %(message)s", datefmt="%Y.%m.%d %H:%M:%S")
+
+
+def main(config=None) -> None:
     if config is None:
         config = default_config
-    logging.basicConfig(filename=None,
-                        level=logging.DEBUG,
-                        )
-    process_folder(config["LOG_DIR"], config["REPORT_DIR"], config["REPORT_SIZE"])
+    prepare_logging(config.get("LOG_FILE", None))
+    process_folder(config["LOG_DIR"], config["REPORT_DIR"], config["ERROR_MAX_RATIO"], config["REPORT_SIZE"])
 
 
 if __name__ == "__main__":
