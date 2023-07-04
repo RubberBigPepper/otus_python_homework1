@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 import datetime
 import gzip
+import json
+import sys
 import typing as tp
 import re
 import pathlib
@@ -166,7 +168,9 @@ def process_log_file(log_name: str) -> tp.Tuple[tp.List[dict], int]:
 
 def create_html_file(html_save: str, stat_info: tp.List[dict]) -> None:
     html_txt = pathlib.Path('report.html').read_text().replace("$table_json", str(stat_info))
-    pathlib.Path(html_save).write_text(html_txt)
+    path = pathlib.Path(html_save)
+    os.makedirs(path.parent.as_posix(), exist_ok=True)
+    path.write_text(html_txt)
 
 
 def provide_last_log_path_and_date(log_folder: str) -> tp.Tuple[tp.Optional[str], tp.Optional[str]]:
@@ -205,16 +209,30 @@ def process_folder(log_folder: str, report_folder: str, max_error_ratio: float, 
 
 
 def prepare_logging(filename: tp.Optional[str]) -> None:
-    logging.basicConfig(filename=filename, level=logging.DEBUG,
-                        format="[%(asctime)s] %(levelname).1s %(message)s", datefmt="%Y.%m.%d %H:%M:%S")
+    logging.basicConfig(filename=filename,
+                        level=logging.DEBUG,
+                        format="[%(asctime)s] %(levelname).1s %(message)s",
+                        datefmt="%Y.%m.%d %H:%M:%S",
+        )
 
 
-def main(config=None) -> None:
-    if config is None:
-        config = default_config
+def read_config(filename: str) -> tp.Dict[str, tp.Any]:
+    with open(filename) as f:
+        config = json.load(f)
+    for key, value in default_config.items():
+        if key not in config:
+            config[key] = value
+    return config
+
+
+def main(argv: tp.List[str]) -> None:
+    config = read_config(argv[0]) if len(argv) > 0 else default_config
     prepare_logging(config.get("LOG_FILE", None))
-    process_folder(config["LOG_DIR"], config["REPORT_DIR"], config["ERROR_MAX_RATIO"], config["REPORT_SIZE"])
+    try:
+        process_folder(config["LOG_DIR"], config["REPORT_DIR"], config["ERROR_MAX_RATIO"], config["REPORT_SIZE"])
+    except Exception as ex:
+        logging.exception(ex.args)
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
