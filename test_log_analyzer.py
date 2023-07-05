@@ -1,16 +1,14 @@
 import unittest
+import pycodestyle
 import log_analyzer
 import time
 
 
 class TestSuite(unittest.TestCase):
-    def setUp(self):
-        pass
-
     def test_log_info_parsing(self):
         test_row = ['1.126.153.80', '-', '-', '[29/Jun/2017:04:06:36 +0300]', 'GET /api/v2/banner/23964943 HTTP/1.1',
                     '200', '939', '-', '-', '-', '1498698395-48424485-4709-9935542', '1835ae0f17f', '0.609']
-        log_info = log_analyzer.parse_log_info(iter(test_row))
+        log_info = log_analyzer.parse_log_info(test_row)
         self.assertEqual(log_info.remote_addr, '1.126.153.80')
         self.assertEqual(log_info.remote_user, '-')
         self.assertEqual(log_info.http_x_real_ip, '-')
@@ -64,6 +62,12 @@ class TestSuite(unittest.TestCase):
         self.assertEqual(stat_info.request_times_max(), 12.0)
         self.assertEqual(stat_info.request_times_avg(), 6.041666666666667)
         self.assertEqual(stat_info.request_times_median(), 5.5)
+
+    def test_code_style(self):
+        filename = "log_analyzer.py"
+
+        pep = pycodestyle.Checker(filename)
+        self.assertTrue(pep.check_all() == 0, f"{filename} has code style errors")
 
 
 if __name__ == "__main__":

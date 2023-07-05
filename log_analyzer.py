@@ -86,25 +86,27 @@ class StatInfo:
             return sorted_times[length // 2 + 1]
 
 
-def parse_log_info(data: tp.Iterator[str]) -> LogInfo:
+def parse_log_info(data: tp.List[str]) -> LogInfo:
+    assert len(data) == 13
+    iter_data = iter(data)
     result = LogInfo()
-    result.remote_addr = next(data)
-    result.remote_user = next(data)
-    result.http_x_real_ip = next(data)
-    result.time_local = time.strptime(next(data), "[%d/%b/%Y:%H:%M:%S %z]")
-    result.request = next(data)
-    result.status = next(data)
-    result.body_bytes_sent = next(data)
-    result.http_referer = next(data)
-    result.http_user_agent = next(data)
-    result.http_x_forwarded_for = next(data)
-    result.http_X_REQUEST_ID = next(data)
-    result.http_X_RB_USER = next(data)
-    result.request_time = float(next(data))
+    result.remote_addr = next(iter_data)
+    result.remote_user = next(iter_data)
+    result.http_x_real_ip = next(iter_data)
+    result.time_local = time.strptime(next(iter_data), "[%d/%b/%Y:%H:%M:%S %z]")
+    result.request = next(iter_data)
+    result.status = next(iter_data)
+    result.body_bytes_sent = next(iter_data)
+    result.http_referer = next(iter_data)
+    result.http_user_agent = next(iter_data)
+    result.http_x_forwarded_for = next(iter_data)
+    result.http_X_REQUEST_ID = next(iter_data)
+    result.http_X_RB_USER = next(iter_data)
+    result.request_time = float(next(iter_data))
     return result
 
 
-def process_log_info(reader: tp.Generator[tp.Iterator[str], None, None]) -> tp.Tuple[tp.Dict[str, StatInfo], int]:
+def process_log_info(reader: tp.Generator[tp.List[str], None, None]) -> tp.Tuple[tp.Dict[str, StatInfo], int]:
     request_2_log_info = {}
     error_count = 0
     for info in reader:
@@ -125,13 +127,11 @@ def log_line_split(s: str) -> tp.List[str]:
     return [part.replace("\x00", " ").replace('"', '') for part in parts]
 
 
-def _read_log(log_name: str) -> tp.Generator[tp.Iterator[str], None, None]:
+def _read_log(log_name: str) -> tp.Generator[tp.List[str], None, None]:
     reader = gzip.open if log_name.lower().endswith(".gz") else open
     with reader(log_name, mode="rt", encoding="utf8") as file:
         for line in file:
-            row = log_line_split(line.rstrip())
-            # print(row)
-            yield iter(row)
+            yield log_line_split(line.rstrip())
 
 
 def calculate_stat_info(stat_info: tp.Dict[str, StatInfo]) -> tp.List[dict]:
@@ -209,11 +209,12 @@ def process_folder(log_folder: str, report_folder: str, max_error_ratio: float, 
 
 
 def prepare_logging(filename: tp.Optional[str]) -> None:
-    logging.basicConfig(filename=filename,
-                        level=logging.DEBUG,
-                        format="[%(asctime)s] %(levelname).1s %(message)s",
-                        datefmt="%Y.%m.%d %H:%M:%S",
-        )
+    logging.basicConfig(
+        filename=filename,
+        level=logging.DEBUG,
+        format="[%(asctime)s] %(levelname).1s %(message)s",
+        datefmt="%Y.%m.%d %H:%M:%S",
+    )
 
 
 def read_config(filename: str) -> tp.Dict[str, tp.Any]:
