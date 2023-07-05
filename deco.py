@@ -25,11 +25,13 @@ def decorator():
 
 def countcalls(func):
     '''Decorator that counts calls made to the function decorated.'''
+
     def wrapper(*args, **kwargs):
         wrapper.count += 1
         res = func(*args, **kwargs)
         print(f"{func.__name__} была вызвана: {wrapper.count}x")
         return res
+
     wrapper.count = 0
     return wrapper
 
@@ -39,12 +41,14 @@ def memo(func):
     Memoize a function so that it caches all return values for
     faster future lookups.
     '''
+
     def wrapper(*args, **kwargs):
         if func in wrapper.result:
             return wrapper.result[func]
         res = func(*args, **kwargs)
         wrapper.result[func] = res
         return res
+
     wrapper.result = {}
     return wrapper
 
@@ -80,26 +84,26 @@ def trace():
     return
 
 
-#@memo
+# @memo
 @countcalls
-#@n_ary
+# @n_ary
 def foo(a, b):
     return a + b
 
 
 @countcalls
 @memo
-#@n_ary
+# @n_ary
 def bar(a, b):
     return a * b
 
 
 @countcalls
-#@trace("####")
+# @trace("####")
 @memo
 def fib(n):
     """Some doc"""
-    return 1 if n <= 1 else fib(n-1) + fib(n-2)
+    return 1 if n <= 1 else fib(n - 1) + fib(n - 2)
 
 
 def main():

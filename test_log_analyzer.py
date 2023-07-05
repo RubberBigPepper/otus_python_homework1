@@ -48,7 +48,6 @@ class TestSuite(unittest.TestCase):
         self.assertEqual(stat_info.request_times_avg(), 2.5)
         self.assertEqual(stat_info.request_times_median(), 2.5)
 
-
     def test_stat_info(self):
         stat_info = log_analyzer.StatInfo("test")
         stat_info.append_time(10.0)

@@ -201,9 +201,11 @@ def prepare_hand_iterator(hand: tp.List[str]) -> tp.Generator[tp.List[str], None
     joker_iterators = None
     for card in hand:
         if card == "?B":
-            joker_iterators = itertools.product(joker_iterators, joker_replacement_generator(True)) if joker_iterators else joker_replacement_generator(True)
+            joker_iterators = itertools.product(joker_iterators, joker_replacement_generator(
+                True)) if joker_iterators else joker_replacement_generator(True)
         elif card == "?R":
-            joker_iterators = itertools.product(joker_iterators, joker_replacement_generator(False)) if joker_iterators else joker_replacement_generator(False)
+            joker_iterators = itertools.product(joker_iterators, joker_replacement_generator(
+                False)) if joker_iterators else joker_replacement_generator(False)
         else:
             clear_cards.append(card)
     if joker_iterators:
