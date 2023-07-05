@@ -3,14 +3,14 @@
 import datetime
 import gzip
 import json
-import sys
-import typing as tp
-import re
-import pathlib
 import logging
-import time
 import os
 import os.path
+import pathlib
+import re
+import sys
+import time
+import typing as tp
 from dataclasses import dataclass
 
 # log_format ui_short '$remote_addr  $remote_user $http_x_real_ip [$time_local] "$request" '
@@ -22,7 +22,8 @@ default_config = {
     "REPORT_SIZE": 1000,
     "REPORT_DIR": "./reports",
     "LOG_DIR": "./log",
-    "ERROR_MAX_RATIO": 0.4,  # отношение ошибочных строк к общим, больше которого - ошибка обработки лога
+    "ERROR_MAX_RATIO": 0.4,
+    # отношение ошибочных строк к общим, больше которого - ошибка обработки лога
     "LOG_FILE": None  # файл для лога, если нет - в консоль
 }
 
@@ -81,7 +82,8 @@ class StatInfo:
         if length == 1:
             return 0.5 * sorted_times[0]
         elif length % 2 == 0:  # в четных рядах - полусумма элементов
-            return 0.5 * (sorted_times[length // 2] + sorted_times[length // 2 - 1])
+            return 0.5 * (sorted_times[length // 2] + sorted_times[
+                length // 2 - 1])
         else:  # иначе - элемент посредине
             return sorted_times[length // 2 + 1]
 
@@ -93,7 +95,8 @@ def parse_log_info(data: tp.List[str]) -> LogInfo:
     result.remote_addr = next(iter_data)
     result.remote_user = next(iter_data)
     result.http_x_real_ip = next(iter_data)
-    result.time_local = time.strptime(next(iter_data), "[%d/%b/%Y:%H:%M:%S %z]")
+    result.time_local = time.strptime(next(iter_data),
+                                      "[%d/%b/%Y:%H:%M:%S %z]")
     result.request = next(iter_data)
     result.status = next(iter_data)
     result.body_bytes_sent = next(iter_data)
@@ -106,14 +109,16 @@ def parse_log_info(data: tp.List[str]) -> LogInfo:
     return result
 
 
-def process_log_info(reader: tp.Generator[tp.List[str], None, None]) -> tp.Tuple[tp.Dict[str, StatInfo], int]:
+def process_log_info(reader: tp.Generator[tp.List[str], None, None]) -> \
+tp.Tuple[tp.Dict[str, StatInfo], int]:
     request_2_log_info = {}
     error_count = 0
     for info in reader:
         try:
             log_info = parse_log_info(info)
             request = log_info.request_clear()
-            sat_info = request_2_log_info[request] if request_2_log_info.get(request, False) else StatInfo(request)
+            sat_info = request_2_log_info[request] if request_2_log_info.get(
+                request, False) else StatInfo(request)
             sat_info.append_time(log_info.request_time)
             request_2_log_info[request] = sat_info
         except Exception as exc:
@@ -123,7 +128,8 @@ def process_log_info(reader: tp.Generator[tp.List[str], None, None]) -> tp.Tuple
 
 
 def log_line_split(s: str) -> tp.List[str]:
-    parts = re.sub('".+?"|\[.+?\]', lambda x: x.group(0).replace(" ", "\x00"), s).split()
+    parts = re.sub('".+?"|\[.+?\]', lambda x: x.group(0).replace(" ", "\x00"),
+                   s).split()
     return [part.replace("\x00", " ").replace('"', '') for part in parts]
 
 
@@ -167,18 +173,21 @@ def process_log_file(log_name: str) -> tp.Tuple[tp.List[dict], int]:
 
 
 def create_html_file(html_save: str, stat_info: tp.List[dict]) -> None:
-    html_txt = pathlib.Path('report.html').read_text().replace("$table_json", str(stat_info))
+    html_txt = pathlib.Path('report.html').read_text().replace("$table_json",
+                                                               str(stat_info))
     path = pathlib.Path(html_save)
     os.makedirs(path.parent.as_posix(), exist_ok=True)
     path.write_text(html_txt)
 
 
-def provide_last_log_path_and_date(log_folder: str) -> tp.Tuple[tp.Optional[str], tp.Optional[str]]:
+def provide_last_log_path_and_date(log_folder: str) -> tp.Tuple[
+    tp.Optional[str], tp.Optional[str]]:
     reg_mask = r'nginx-access-ui.log-(\d{2})(\d{2})(\d{4})($|.gz)'
     files = sorted(
         [
             file for file in os.listdir(log_folder)
-            if os.path.isfile(os.path.join(log_folder, file)) and re.match(reg_mask, file)
+            if os.path.isfile(os.path.join(log_folder, file)) and re.match(
+            reg_mask, file)
         ],
         reverse=True
     )
@@ -189,19 +198,24 @@ def provide_last_log_path_and_date(log_folder: str) -> tp.Tuple[tp.Optional[str]
     return log_name, date_str
 
 
-def process_folder(log_folder: str, report_folder: str, max_error_ratio: float, report_size: int = 0) -> None:
+def process_folder(log_folder: str, report_folder: str, max_error_ratio: float,
+                   report_size: int = 0) -> None:
     log_name, date_str = provide_last_log_path_and_date(log_folder)
     if log_name is None or date_str is None:
         logging.info("No log file to work, exit")
         return
     html_save = os.path.join(report_folder, f"report-{date_str}.html")
     if os.path.exists(html_save):
-        logging.info("report file to log already exists, working was canceled, exit")
+        logging.info(
+            "report file to log already exists, working was canceled, exit")
         return
-    stat_info, error_count = process_log_file(os.path.join(log_folder, log_name))
+    stat_info, error_count = process_log_file(
+        os.path.join(log_folder, log_name))
     error_ratio = float(error_count) / len(stat_info)
     if error_ratio > max_error_ratio:
-        logging.error(f"report file has too many error(error_ratio is {error_ratio}, limit is {max_error_ratio}, exit")
+        logging.error(
+            f"report file has too many error(error_ratio is {error_ratio}, "
+            f"limit is {max_error_ratio}, exit")
         return
     if report_size > 0:
         stat_info = stat_info[:min(len(stat_info), report_size)]
@@ -230,7 +244,8 @@ def main(argv: tp.List[str]) -> None:
     config = read_config(argv[0]) if len(argv) > 0 else default_config
     prepare_logging(config.get("LOG_FILE", None))
     try:
-        process_folder(config["LOG_DIR"], config["REPORT_DIR"], config["ERROR_MAX_RATIO"], config["REPORT_SIZE"])
+        process_folder(config["LOG_DIR"], config["REPORT_DIR"],
+                       config["ERROR_MAX_RATIO"], config["REPORT_SIZE"])
     except Exception as ex:
         logging.exception(ex.args)
 
