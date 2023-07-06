@@ -199,8 +199,7 @@ def joker_replacement_generator(is_black: bool) -> tp.List[str]:
     return cards
 
 
-def prepare_hand_iterator(hand: tp.List[str]) -> tp.Generator[
-    tp.List[str], None, None]:
+def prepare_hand_iterator(hand: tp.List[str]) -> tp.Generator[tp.List[str], None, None]:
     clear_cards = []
     joker_iterators = None
     for card in hand:
