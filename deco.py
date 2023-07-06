@@ -3,21 +3,21 @@
 
 
 def disable():
-    '''
+    """
     Disable a decorator by re-assigning the decorator's name
     to this function. For example, to turn off memoization:
 
     >>> memo = disable
 
-    '''
+    """
     return
 
 
 def decorator():
-    '''
+    """
     Decorate a decorator so that it inherits the docstrings
     and stuff from the function it's decorating.
-    '''
+    """
     return
 
 

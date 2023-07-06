@@ -22,9 +22,8 @@ default_config = {
     "REPORT_SIZE": 1000,
     "REPORT_DIR": "./reports",
     "LOG_DIR": "./log",
-    "ERROR_MAX_RATIO": 0.4,
-    # отношение ошибочных строк к общим, больше которого - ошибка обработки лога
-    "LOG_FILE": None  # файл для лога, если нет - в консоль
+    "ERROR_MAX_RATIO": 0.4,  # отношение ошибочных строк к общим, больше которого - ошибка обработки лога
+    "LOG_FILE": None,  # файл для лога, если нет - в консоль
 }
 
 
@@ -138,7 +137,7 @@ def _read_log(log_name: str) -> tp.Generator[tp.List[str], None, None]:
 def calculate_stat_info(stat_info: tp.Dict[str, StatInfo]) -> tp.List[dict]:
     all_count = 0
     all_time = 0
-    for request, info in stat_info.items():
+    for info in stat_info.values():
         all_count += info.count()
         all_time += info.request_times_sum()
 
