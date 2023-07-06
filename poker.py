@@ -29,6 +29,7 @@
 
 import itertools
 import typing as tp
+from typing import Union, Optional
 
 
 def card_rank(card: str) -> int:
@@ -46,17 +47,17 @@ def card_rank(card: str) -> int:
         return int(card[0])
 
 
-def remove_sublist_from_list(source: tp.List[int],
-                             what_remove: tp.List[int]) -> tp.List[int]:
+def remove_sublist_from_list(source: tp.List[int], what_remove: tp.List[int]) -> tp.List[int]:
     return list(filter(lambda x: x not in what_remove, source))
 
 
-def hand_rank(hand: tp.List[str]) -> tp.Tuple[int, tp.Any, tp.Any]:
+def hand_rank(hand: tp.List[str]) -> Union[
+    tuple[int, int], tuple[int, Optional[int], Optional[int]], tuple[int, int, list[int]], tuple[
+        int, Optional[int], list[int]], tuple[int, Optional[list[int]], int], tuple[int, list[int]]]:
     """Возвращает значение определяющее ранг 'руки'"""
     ranks = card_ranks(hand)
     if straight(ranks) and flush(hand):  # стритфлеш
-        return 8, max(
-            ranks)  # пока двоякая форма туза (как туз и как единичка) не реализована
+        return 8, max(ranks)  # пока двоякая форма туза (как туз и как единичка) не реализована
     elif kind(4, ranks):  # каре
         return 7, kind(4, ranks), kind(1, ranks)
     elif kind(3, ranks) and kind(2, ranks):  # фуллхаус
@@ -66,14 +67,11 @@ def hand_rank(hand: tp.List[str]) -> tp.Tuple[int, tp.Any, tp.Any]:
     elif straight(ranks):  # стрит
         return 4, max(ranks)
     elif kind(3, ranks):  # сет (3 одинаковых)
-        return 3, kind(3, ranks), remove_sublist_from_list(ranks,
-                                                           [kind(3, ranks)])
+        return 3, kind(3, ranks), remove_sublist_from_list(ranks, [kind(3, ranks)])
     elif two_pair(ranks):  # две пары
-        return 2, two_pair(ranks), \
-        remove_sublist_from_list(ranks, two_pair(ranks))[0]
+        return 2, two_pair(ranks), remove_sublist_from_list(ranks, two_pair(ranks))[0]
     elif kind(2, ranks):  # одна пара
-        return 1, kind(2, ranks), remove_sublist_from_list(ranks,
-                                                           [kind(2, ranks)])
+        return 1, kind(2, ranks), remove_sublist_from_list(ranks, [kind(2, ranks)])
     else:  # набор карт
         return 0, ranks
 
@@ -207,15 +205,11 @@ def prepare_hand_iterator(hand: tp.List[str]) -> tp.Generator[
     joker_iterators = None
     for card in hand:
         if card == "?B":
-            joker_iterators = itertools.product(joker_iterators,
-                                                joker_replacement_generator(
-                                                    True)) if joker_iterators \
-                else joker_replacement_generator(True)
+            joker_iterators = itertools.product(joker_iterators, joker_replacement_generator(
+                True)) if joker_iterators else joker_replacement_generator(True)
         elif card == "?R":
-            joker_iterators = itertools.product(joker_iterators,
-                                                joker_replacement_generator(
-                                                    False)) if joker_iterators\
-                else joker_replacement_generator(False)
+            joker_iterators = itertools.product(joker_iterators, joker_replacement_generator(
+                False)) if joker_iterators else joker_replacement_generator(False)
         else:
             clear_cards.append(card)
     if joker_iterators:
@@ -224,8 +218,7 @@ def prepare_hand_iterator(hand: tp.List[str]) -> tp.Generator[
             if type(joker_cards) == str:
                 result_card.append(joker_cards)
             else:
-                result_card += [card for card in joker_cards if
-                                card not in result_card]
+                result_card += [card for card in joker_cards if card not in result_card]
             if len(result_card) < 7:
                 continue
             yield result_card
@@ -283,8 +276,7 @@ def test_flush():
 def test_card_ranks():
     print("test_card_ranks function..")
     assert (card_ranks("6C 7C 8C 9C TC 5C".split()) == [10, 9, 8, 7, 6, 5])
-    assert (card_ranks("JD TC TH 7C 7D 7S 7H".split()) == [11, 10, 10, 7, 7, 7,
-                                                           7])
+    assert (card_ranks("JD TC TH 7C 7D 7S 7H".split()) == [11, 10, 10, 7, 7, 7, 7])
     print('OK')
 
 
